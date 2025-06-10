@@ -684,6 +684,77 @@ show_cluster_summary() {
     echo ""
 }
 
+# Function to execute post-bootstrap steps
+execute_post_bootstrap_steps() {
+    local first_controller
+    first_controller=$(get_first_controller)
+    
+    echo -e "${BLUE}=== Post-Bootstrap Steps ===${NC}"
+    echo ""
+    
+    # Step 1: Export kubeconfig
+    read -p "Execute Step 1: Export kubeconfig to current shell? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Exporting KUBECONFIG...${NC}"
+        export KUBECONFIG="$PWD/kubeconfig"
+        echo -e "${GREEN}✓ KUBECONFIG exported to: $KUBECONFIG${NC}"
+        echo -e "${YELLOW}Note: This only affects the current shell session${NC}"
+    else
+        echo -e "${YELLOW}Skipped: Remember to export KUBECONFIG manually${NC}"
+    fi
+    echo ""
+    
+    # Step 2: Check node status
+    read -p "Execute Step 2: Check cluster node status? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Checking cluster nodes...${NC}"
+        if command -v kubectl &> /dev/null && [[ -n "$KUBECONFIG" ]]; then
+            kubectl get nodes -o wide || echo -e "${YELLOW}Note: Nodes may show as NotReady until CozyStack CNI is installed${NC}"
+        else
+            echo -e "${YELLOW}kubectl not available or KUBECONFIG not set${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Skipped: Check nodes manually with: kubectl get nodes -w${NC}"
+    fi
+    echo ""
+    
+    # Step 3: CozyStack installation prompt
+    read -p "Execute Step 3: Open CozyStack documentation? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Opening CozyStack documentation...${NC}"
+        if command -v xdg-open &> /dev/null; then
+            xdg-open "https://cozystack.io/docs/installation/" 2>/dev/null &
+            echo -e "${GREEN}✓ Opened documentation in browser${NC}"
+        elif command -v open &> /dev/null; then
+            open "https://cozystack.io/docs/installation/" 2>/dev/null &
+            echo -e "${GREEN}✓ Opened documentation in browser${NC}"
+        else
+            echo -e "${YELLOW}Cannot auto-open browser. Please visit: https://cozystack.io/docs/installation/${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Skipped: Follow CozyStack documentation manually${NC}"
+    fi
+    echo ""
+    
+    # Step 4: Talos health check
+    read -p "Execute Step 4: Check Talos cluster health? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Checking Talos cluster health...${NC}"
+        if talosctl --talosconfig talosconfig --nodes "${first_controller}" health; then
+            echo -e "${GREEN}✓ Talos cluster health check completed${NC}"
+        else
+            echo -e "${YELLOW}⚠ Health check completed with warnings (this may be normal during initial setup)${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Skipped: Check Talos health manually${NC}"
+    fi
+    echo ""
+}
+
 # Function to display final instructions
 show_final_instructions() {
     echo -e "${GREEN}=== Bootstrap Complete! ===${NC}"
@@ -715,6 +786,16 @@ show_final_instructions() {
     echo -e "- controlplane.yaml: Controller node configuration"
     echo -e "- worker.yaml: Worker node configuration"
     echo -e "- $NODES_CONFIG_FILE: Node configuration file"
+    echo ""
+    
+    # Ask if user wants to execute post-bootstrap steps
+    read -p "Would you like to execute these next steps interactively? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        execute_post_bootstrap_steps
+    else
+        echo -e "${YELLOW}You can run these steps manually using the commands shown above.${NC}"
+    fi
 }
 
 # Main execution
